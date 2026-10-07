@@ -1,0 +1,622 @@
+# AI-Powered Customer Email Handling Pipeline
+
+## Phase 1 — Project Planning
+
+---
+
+## 1. Project Overview
+
+### Project Name
+
+**AI-Powered Customer Email Handling Pipeline**
+
+### Project Type
+
+AI-powered backend application for automated customer email analysis, response generation, and escalation.
+
+### Technology Stack
+
+* **Backend:** Python
+* **API Framework:** FastAPI
+* **Database:** PostgreSQL
+* **ORM:** SQLAlchemy
+* **Data Validation:** Pydantic
+* **AI:** LLM/API-based AI service
+* **Version Control:** Git + GitHub
+* **Configuration:** Environment variables / `.env`
+
+---
+
+# 2. Problem Statement
+
+Organizations receive a large number of customer emails containing questions, complaints, product issues, order-related requests, and other support queries.
+
+Manually processing these emails requires support agents to:
+
+* Read and understand the customer's message.
+* Determine the urgency and priority.
+* Identify the type of request.
+* Understand the customer's sentiment.
+* Look up customer information.
+* Review relevant purchase history.
+* Decide whether the issue can be handled automatically or requires human intervention.
+* Write an appropriate response.
+
+This manual process can be time-consuming and may result in inconsistent prioritization, delayed responses, or inappropriate automated responses.
+
+The goal of this project is to build an **AI-powered backend pipeline that assists in processing customer emails automatically while ensuring that complex, uncertain, or sensitive cases are escalated to a human agent.**
+
+---
+
+# 3. Proposed Solution
+
+The system will expose a REST API through which a customer email can be submitted.
+
+For the initial version, emails will be provided manually through an API rather than integrating directly with Gmail, Outlook, or another email provider.
+
+Once an email is received, the system will:
+
+1. Validate the email.
+2. Store the email in PostgreSQL.
+3. Identify the customer using the sender's email address.
+4. Retrieve the customer's purchase history when available.
+5. Create a support ticket for the email.
+6. Send the relevant email information to the AI service.
+7. Analyze the email using AI.
+8. Determine:
+
+   * Sentiment
+   * Priority
+   * Category/intent
+   * Confidence
+9. Apply backend business rules to determine whether the email can be handled automatically.
+10. Generate an AI-assisted response for supported cases.
+11. Escalate complex, uncertain, unsupported, or sensitive cases.
+12. Store the AI analysis, decision, and response.
+13. Return the processing result through the API.
+
+---
+
+# 4. High-Level Workflow
+
+```text
+                    Customer Email
+                          |
+                          v
+                  Receive through API
+                          |
+                          v
+                  Validate Email
+                          |
+                          v
+                   Store Email
+                          |
+                          v
+                  Identify Customer
+                          |
+                 +--------+--------+
+                 |                 |
+             Customer Found    Not Found
+                 |                 |
+                 v                 v
+        Retrieve Purchases     Continue safely
+                 |                 |
+                 +--------+--------+
+                          |
+                          v
+                    Create Ticket
+                          |
+                          v
+                      AI Analysis
+                 +--------+--------+
+                 |        |        |
+             Sentiment  Priority  Category
+                 |        |        |
+                 +--------+--------+
+                          |
+                          v
+                      Confidence
+                          |
+                          v
+                 Handling Decision
+                          |
+              +-----------+-----------+
+              |                       |
+              v                       v
+         Auto Handling            Escalation
+              |                       |
+              v                       v
+       Generate Response       Human Agent Review
+              |                       |
+              +-----------+-----------+
+                          |
+                          v
+                  Store Final Result
+                          |
+                          v
+                    API Response
+```
+
+---
+
+
+# 5. Functional Requirements
+
+## FR-01: Receive Customer Email
+
+The system shall provide an API endpoint to receive a customer email.
+
+The request should contain at minimum:
+
+* Sender email
+* Subject
+* Email body
+
+Example:
+
+```json
+{
+  "from": "customer@example.com",
+  "subject": "Urgent issue with my order",
+  "body": "My product is not working and I need help urgently."
+}
+```
+
+---
+
+## FR-02: Validate Email
+
+The system shall validate incoming email data.
+
+Examples:
+
+* Sender email must be valid.
+* Subject should not be empty.
+* Body should not be empty.
+* Invalid requests should return an appropriate API error.
+
+---
+
+## FR-03: Store Email
+
+The system shall store the received email in PostgreSQL.
+
+The email should retain its relationship with the identified customer when a matching customer exists.
+
+---
+
+## FR-04: Identify Customer
+
+The system shall attempt to identify the customer using the sender's email address.
+
+Expected behavior:
+
+```text
+Sender Email
+     |
+     v
+Search Customer
+     |
+     +---- Found ----> Customer ID
+     |
+     +---- Not Found -> Customer ID = NULL
+```
+
+An unknown customer should not cause the entire pipeline to fail.
+
+---
+
+## FR-05: Retrieve Purchase History
+
+If a customer is identified, the system shall retrieve the customer's relevant purchase history.
+
+The purchase history may be provided to the AI service as contextual information when it is relevant to the customer's request.
+
+The AI service must not directly access the database.
+
+---
+
+## FR-06: Create Ticket
+
+Each incoming email shall create one support ticket.
+
+### MVP rule
+
+**One Email = One Ticket**
+
+The MVP will not attempt to group multiple emails into the same ticket.
+
+---
+
+## FR-07: AI Email Analysis
+
+The system shall send relevant email information to the AI service for analysis.
+
+The AI should determine:
+
+### Sentiment
+
+Examples:
+
+* Positive
+* Neutral
+* Negative
+
+### Priority
+
+Examples:
+
+* Low
+* Medium
+* High
+* Critical
+
+### Category
+
+Examples:
+
+* Login Issue
+* Product Issue
+* Order Issue
+* Refund Request
+* General Question
+* Complaint
+* Other
+
+The category list can evolve as the project develops.
+
+### Confidence
+
+The AI should provide a confidence value representing how confident it is in its analysis.
+
+Example:
+
+```json
+{
+  "sentiment": "negative",
+  "priority": "high",
+  "category": "product_issue",
+  "confidence": 0.91
+}
+```
+
+---
+
+# 6. Handling Decision
+
+The system must determine whether the email should be automatically handled or escalated.
+
+The AI may provide information used by the decision process, but the backend should enforce the final business rules.
+
+## Auto-Handling Examples
+
+An email may be automatically handled when:
+
+* The request belongs to a supported category.
+* Sufficient information is available.
+* AI confidence is sufficiently high.
+* The request does not require human judgment.
+* The response can be generated without inventing information.
+
+Examples:
+
+* Simple product information question
+* Basic order-related question
+* Supported login question
+* General informational request
+
+---
+
+## Escalation Examples
+
+The system should escalate when:
+
+* AI confidence is too low.
+* The request is complex.
+* The request is unsupported.
+* Required information is missing.
+* The customer is making a sensitive or high-risk request.
+* The AI cannot safely determine an appropriate response.
+* Responding automatically could result in misinformation.
+
+The system should prefer **escalation over hallucination**.
+
+---
+
+
+
+# 7. Database Requirements
+
+The project will use PostgreSQL for persistent storage.
+
+The conceptual data model is:
+
+```text
+Customer
+   |
+   +------< Purchase
+   |
+   +------< Email
+              |
+              | 1 : 1
+              v
+            Ticket
+              |
+              +------ AI Analysis
+              |
+              +------ AI Response
+```
+
+### Customer
+
+Stores customer information.
+
+Expected fields:
+
+* id
+* name
+* email
+* address
+* created_at
+
+Customer email should be unique.
+
+---
+
+### Purchase
+
+Stores customer purchase information.
+
+Expected fields:
+
+* id
+* customer_id
+* product_name
+* amount
+* purchased_at
+
+Relationship:
+
+```text
+One Customer
+      |
+      +---- Many Purchases
+```
+
+---
+
+### Email
+
+Stores the original customer email.
+
+Expected fields:
+
+* id
+* from
+* customer_id
+* subject
+* body
+* received_at
+
+`customer_id` may be null when the sender is not found.
+
+---
+
+### Ticket
+
+Represents the support ticket created for an email.
+
+Expected fields:
+
+* id
+* email_id
+* customer_id
+* subject
+* category
+* status
+* created_at
+* updated_at
+
+Each email creates exactly one ticket in the MVP.
+
+---
+
+### AI Analysis
+
+Stores the AI analysis associated with the ticket.
+
+Expected fields:
+
+* id
+* ticket_id
+* sentiment
+* priority
+* category
+* confidence
+* created_at
+
+A single confidence value will be used in the MVP rather than maintaining multiple confidence fields.
+
+---
+
+### AI Response
+
+Stores the generated response and handling decision.
+
+Expected fields:
+
+* id
+* ticket_id
+* response_text
+* decision
+* created_at
+
+Possible decisions:
+
+```text
+AUTO_REPLY
+ESCALATE
+```
+
+---
+
+
+
+
+---
+
+# 8. Use Cases
+
+## UC-01: Normal Customer Question
+
+```text
+Customer submits email
+        |
+        v
+Customer identified
+        |
+        v
+AI analyzes email
+        |
+        v
+Supported + High Confidence
+        |
+        v
+Generate response
+        |
+        v
+Store response
+```
+
+Expected result:
+
+**Auto Reply**
+
+---
+
+## UC-02: Urgent Customer Issue
+
+```text
+Customer submits urgent email
+        |
+        v
+AI identifies high priority
+        |
+        v
+Backend evaluates rules
+        |
+        +---- Safe to handle ----> Auto Reply
+        |
+        +---- Requires human ----> Escalate
+```
+
+Urgency alone does not automatically mean escalation; the final decision depends on the nature of the request.
+
+---
+
+## UC-03: Unknown Customer
+
+```text
+Email received
+      |
+      v
+Search customer
+      |
+      v
+Customer not found
+      |
+      v
+customer_id = NULL
+      |
+      v
+Continue processing safely
+```
+
+If the missing customer information prevents a reliable response, the ticket should be escalated.
+
+---
+
+## UC-04: Customer With Purchase History
+
+```text
+Email received
+      |
+      v
+Customer identified
+      |
+      v
+Purchase history retrieved
+      |
+      v
+Relevant information provided as AI context
+      |
+      v
+AI analyzes request
+      |
+      v
+Generate response / Escalate
+```
+
+---
+
+## UC-05: Low Confidence
+
+```text
+Email
+  |
+  v
+AI Analysis
+  |
+  v
+Low Confidence
+  |
+  v
+Escalate
+```
+
+The system should not generate an unreliable automated response simply to avoid escalation.
+
+---
+
+## UC-06: Complex Complaint
+
+```text
+Email
+  |
+  v
+AI identifies complex complaint
+  |
+  v
+Backend decision rules
+  |
+  v
+Escalate
+  |
+  v
+Human Agent Review
+```
+
+---
+
+## UC-07: AI Service Failure
+
+```text
+Email
+  |
+  v
+AI Service
+  |
+  X
+Failure
+  |
+  v
+Handle Error
+  |
+  v
+Escalate / Retry according to implementation
+```
+
+The application must not crash or lose the original email because the AI service is unavailable.
+
+---
+
